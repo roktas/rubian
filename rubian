@@ -732,8 +732,7 @@ ensure_arguments_really_installed() {
 		elif has_occupied "$version"; then
 			die "Unmanaged version found: $version"
 		else
-			cry "No such version found: $version"
-			continue
+			die "No such version found: $version"
 		fi
 	done
 }

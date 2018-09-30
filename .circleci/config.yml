@@ -25,4 +25,3 @@ jobs:
               "$prefix"/bin/ruby -v
             done
             ruby -v
-            ./rubian uninstall stable unstable legacy

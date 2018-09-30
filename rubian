@@ -1,0 +1,823 @@
+#!/usr/bin/env bash
+
+[[ ${BASH_VERSION%%.*} -ge 4 ]] || { echo >&2 'Bash version 4 or higher required'; exit 1; }
+
+set -euo pipefail; [[ -z ${TRACE:-} ]] || set -x
+
+# ------------------------------------------------------------------------------
+# Constants
+# ------------------------------------------------------------------------------
+
+# Program name
+readonly PROGNAME=rubian
+
+# Special file name to recognize a prefix directory managed by this program
+readonly SHIBBOLETH=.rubian
+
+# Root directory for all Ruby installations
+readonly RUBIES=${RUBIES:-/opt/rubies}
+
+# ------------------------------------------------------------------------------
+# Globals
+# ------------------------------------------------------------------------------
+
+# Installed Ruby versions keyed by installation directories (aka prefix)
+declare -Ag installed_version_by_prefix=()
+
+# Available Ruby suites (e.g. stable) to install keyed by Ruby versions
+declare -Ag available_suite_by_version=()
+
+# Missing Debian packages required to build Ruby
+declare -ag missing_development_packages=()
+
+# Missing Debian packages required to run Ruby
+declare -ag missing_runtime_packages=()
+
+# Arguments used when running configure
+declare -ag ruby_configure_arguments=()
+
+# Slave programs of Ruby when creating alternative links
+declare -ag ruby_slave_programs=(gem rake ri erb irb rdoc)
+
+# Description and synopsis for command help
+declare -Ag help_description help_synopsis
+
+# Program configuration keyed by options
+declare -Ag program_configuration=()
+
+# Sanitized arguments vector for the command
+declare -ag program_arguments=()
+
+# Temporary files to cleanup on exit
+declare -ag cleanup_files=()
+
+# ------------------------------------------------------------------------------
+# Supported Ruby suites
+# ------------------------------------------------------------------------------
+
+# shellcheck disable=2034
+declare -Ag legacy=(
+	[suite]=legacy
+
+	[version]=2.4.4
+	[major]=2.4
+	[sha256]=1d0034071d675193ca769f64c91827e5f54cb3a7962316a41d5217c7bc6949f0
+	[gem]=2.7.7
+	[bundler]=1.16.5
+)
+
+# shellcheck disable=2034
+declare -Ag stable=(
+	[suite]=stable
+
+	[version]=2.5.1
+	[major]=2.5
+	[sha256]=886ac5eed41e3b5fc699be837b0087a6a5a3d10f464087560d2d21b3e71b754d
+	[gem]=2.7.7
+	[bundler]=1.16.5
+)
+
+# shellcheck disable=2034
+declare -Ag unstable=(
+	[suite]=unstable
+
+	[version]=2.6.0-preview2
+	[major]=2.6
+	[sha256]=00ddfb5e33dee24469dd0b203597f7ecee66522ebb496f620f5815372ea2d3ec
+	[gem]=2.7.7
+	[bundler]=1.16.5
+)
+
+# ------------------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------------------
+
+cry() { echo -e >&2 "$*"; }
+
+if [[ -n ${RUBIAN_NOCOLOR:-} ]]; then
+	hey() { cry "$*";              }
+	fin() { cry "$*"; exit 0;      }
+	die() { cry "$*"; exit 1;      }
+	bug() { cry "BUG: $*"; exit 1; }
+else
+	hey() { cry "\\e[1;38;5;87m----->\\e[0m $*";        }
+	fin() { cry "\\e[1;38;5;255m$*\\e[0m"; exit 0;      }
+	die() { cry "\\e[1;38;5;198m$*\\e[0m"; exit 1;      }
+	bug() { cry "BUG: \\e[1;38;5;207m$*\\e[0m"; exit 1; }
+fi
+
+fetch() {
+	local url=$1
+	local out=$2
+
+	if command -v curl >/dev/null; then
+		curl -fL --retry 3 -o "$out" "$url"
+	elif command -v wget >/dev/null; then
+		local hsts_unfound_before=
+		[[ -f ~/.wget-hsts ]] || hsts_unfound_before=true
+		wget --tries=3 -O "$out" "$url"
+		if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
+			rm -f ~/.wget-hsts
+		fi
+	else
+		die "Wget or Curl required"
+	fi
+}
+
+is_inside_docker() {
+	[[ $(grep -c  docker < /proc/1/cgroup 2>/dev/null) -gt 0 ]] || [[ -f /.dockerenv ]]
+}
+
+# ------------------------------------------------------------------------------
+# Version data structures
+# ------------------------------------------------------------------------------
+
+installed_version_by_prefix_initialize() {
+	[[ -d $RUBIES ]] || return 0
+
+	local -a versions
+	mapfile -t versions < <(
+		shopt -s nullglob
+		cd "$RUBIES"
+		for dir in */"$SHIBBOLETH"; do
+			echo "${dir%%/*}"
+		done
+	)
+
+	local prefix
+	local version
+
+	for version in "${versions[@]}"; do
+		prefix=$(prefix "$version")
+		installed_version_by_prefix[$prefix]=$version
+	done
+}
+
+available_suite_by_version_initialize() {
+	local suite
+
+	for suite in legacy stable unstable; do
+		local version_ref="$suite[version]"
+		local version=${!version_ref}
+
+		available_suite_by_version[$version]=$suite
+	done
+
+	local attr
+	for attr in version major sha256 gem bundler; do
+		eval -- "${attr}_by_suite"'() { local ref=$1['"$attr"']; echo "${!ref}"; }'
+	done
+}
+
+prefix() {
+	local version=$1
+
+	echo "$RUBIES/$version"
+}
+
+has_occupied() {
+	local version=$1
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	[[ -d $prefix ]] && [[ ! -e $prefix/$SHIBBOLETH ]]
+}
+
+has_installed() {
+	local version=$1
+
+	[[ -e $(prefix "$version")/$SHIBBOLETH ]]
+}
+
+canonicalize_available_version() {
+	local versionish=$1
+
+	case $versionish in
+	legacy|stable|unstable)
+		version_by_suite "$versionish"
+		;;
+	[0-9]*)
+		echo "$versionish"
+		;;
+	*)
+		return 1
+	esac
+}
+
+# ------------------------------------------------------------------------------
+# Ruby build phases
+# ------------------------------------------------------------------------------
+
+ruby_fetch() {
+	local version=$1
+
+	hey Fetching "$version" #&& return 0
+
+	local suite=${available_suite_by_version[$version]}
+
+	local major sha256
+
+	major=$(major_by_suite "$suite")
+	sha256=$(sha256_by_suite "$suite")
+
+	fetch "https://cache.ruby-lang.org/pub/ruby/${major}/ruby-${version}.tar.xz" ruby.tar.xz
+	echo "$sha256 *ruby.tar.xz" | sha256sum -c - || die "Checksum error"
+	tar -xJf ruby.tar.xz -C . --strip-components=1
+	rm -f ruby.tar.xz
+}
+
+ruby_depends() {
+	hey Installing dependencies #&& return 0
+
+	apt-get -y update
+
+	local -a development_packages+=(
+		autoconf
+		bison
+		build-essential
+		libffi-dev
+		libgdbm-dev
+		libncurses-dev
+		libreadline-dev
+		libssl-dev
+		libyaml-dev
+		zlib1g-dev
+	)
+
+	local -a runtime_packages+=()
+
+	if [[ -z ${program_configuration[without_jemalloc]:-} ]]; then
+		runtime_packages+=(libjemalloc1)
+		development_packages+=(libjemalloc-dev)
+	fi
+
+	local package
+
+	for package in "${development_packages[@]}"; do
+		# shellcheck disable=2016
+		if [ -z "$(dpkg-query -W -f='${Installed-Size}' "$package" 2>/dev/null ||:)" ]; then
+			missing_development_packages+=("$package")
+		fi
+	done
+
+	for package in "${runtime_packages[@]}"; do
+		# shellcheck disable=2016
+		if [ -z "$(dpkg-query -W -f='${Installed-Size}' "$package" 2>/dev/null ||:)" ]; then
+			missing_runtime_packages+=("$package")
+		fi
+	done
+
+	apt-get -y install --no-install-recommends "${missing_development_packages[@]}" "${missing_runtime_packages[@]}"
+}
+
+ruby_build() {
+	local version=$1
+
+	hey Building "$version" #&& return 0
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	ruby_configure_arguments=(
+		'--disable-install-doc'
+		'--enable-shared'
+		'--prefix'
+		"$prefix"
+	)
+
+	if [[ -z ${program_configuration[without_jemalloc]:-} ]]; then
+		ruby_configure_arguments+=('--with-jemalloc')
+	fi
+
+	! is_inside_docker || CFLAGS='-DENABLE_PATH_CHECK=0'
+
+	./configure CFLAGS="${CFLAGS:-}" "${ruby_configure_arguments[@]}"
+
+	make -j "$(nproc)"
+}
+
+ruby_install() {
+	local version=$1
+
+	hey Installing "$version"
+
+	make install
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	local suite=${available_suite_by_version[$version]}
+
+	mkdir -p "$prefix"/etc
+	cat >"$prefix"/etc/gemrc <<-EOF
+		gem: --no-document --bindir /usr/local/bin
+	EOF
+
+	local gem bundler
+
+	gem=$(gem_by_suite "$suite")
+	bundler=$(bundler_by_suite "$suite")
+
+	"$prefix"/bin/gem update --system "$gem"
+	"$prefix"/bin/gem install bundler --version "$bundler" --force
+
+	gzip -9 "$prefix"/share/man/man1/*.1 &>/dev/null || true
+}
+
+ruby_purge() {
+	local version=$1
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	[[ -d $prefix ]] || return 0
+
+	rm -rf -- "$prefix"
+}
+
+ruby_register() {
+	local version=$1
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	touch "$prefix/$SHIBBOLETH"
+
+	installed_version_by_prefix["$(prefix "$version")"]=$version
+}
+
+ruby_unregister() {
+	local version=$1
+
+	local prefix
+	prefix=$(prefix "$version")
+
+	rm -f -- "$prefix/$SHIBBOLETH"
+
+	unset -v installed_version_by_prefix["$prefix"]
+}
+
+ruby_uninstall() {
+	local version=$1
+
+	ruby_unregister "$version"
+	ruby_purge "$version"
+}
+
+ruby_all() {
+	local version=$1
+
+	local suite=${available_suite_by_version[$version]}
+
+	mkdir -p "$suite" && pushd "$suite" &>/dev/null
+
+	ruby_fetch "$version" || die "E: Fetching Ruby '$version' failed."
+	ruby_build "$version" || die "E: Building Ruby '$version' failed."
+
+	if ruby_install "$version"; then
+		ruby_register "$version"
+	else
+		ruby_purge "$version"
+		die "E: Installing Ruby '$version' failed."
+	fi
+
+
+	popd &>/dev/null && rm -rf -- "$suite"
+}
+
+ruby_version() {
+	ruby -e 'puts RUBY_VERSION'
+}
+
+# ------------------------------------------------------------------------------
+# Alternatives management
+# ------------------------------------------------------------------------------
+
+highest_priority_prefix() {
+	local latest
+	local highest
+
+	local prefix version
+
+	local -A version_by_prefix=()
+
+	for prefix in "${!installed_version_by_prefix[@]}"; do
+		version=${installed_version_by_prefix[$prefix]}
+		version_by_prefix[$prefix]=$version
+	done
+
+	if [[ -x /usr/bin/ruby ]]; then
+		prefix=/usr
+		version=$(PATH=/usr/bin ruby_version)
+		version_by_prefix[$prefix]=$version
+	fi
+
+	if [[ ${#version_by_prefix[@]} -eq 1 ]]; then
+		for prefix in "${!version_by_prefix[@]}"; do
+			highest=$prefix
+			echo "$highest"
+			return 0
+		done
+	fi
+
+	for prefix in "${!version_by_prefix[@]}"; do
+		local version=${version_by_prefix[$prefix]}
+
+		if [[ $version =~ [^0-9.] ]]; then
+			continue
+		fi
+
+		if [[ $version > "${latest:-}" ]]; then
+			latest=$version
+			highest=$prefix
+		elif [[ $version = "${latest:-}" ]]; then
+			[[ $prefix != $RUBIES* ]] || highest=$prefix
+		fi
+	done
+
+	echo "${highest:-}"
+}
+
+priority() {
+	local prefix=$1
+
+	local highest_priority_prefix=$2
+	local lowest_priority_prefix=${3:-}
+
+	case $prefix in
+	$highest_priority_prefix) echo 30 ;;
+	$lowest_priority_prefix)  echo 10 ;;
+	*)                        echo 20 ;;
+	esac
+}
+
+update_alternatives_for_one_prefix() {
+	local prefix=$1
+	local priority=$2
+
+	local program name link path
+
+	program=ruby
+	name=$program
+	link=/usr/local/bin/$name
+	path=$prefix/bin/$name
+
+	[[ -x $path ]] || return 0
+
+	local -a args
+
+	args+=('--install' "$link" "$name" "$path")
+	args+=("$priority")
+
+	for program in "${ruby_slave_programs[@]}"; do
+		name=$program
+		link=/usr/local/bin/$name
+		path=$prefix/bin/$name
+
+		[[ -x $path ]] && args+=('--slave' "$link" "$name" "$path")
+
+		name=$program.1.gz
+		link=/usr/local/share/man/man1/$name
+		path=$prefix/share/man/man1/$name
+
+		if [[ -e $path ]]; then
+			mkdir -p "$(dirname "$link")"
+			args+=('--slave' "$link" "$name" "$path")
+		fi
+	done
+
+	update-alternatives --quiet "${args[@]}"
+}
+
+update_alternatives_for_all() {
+	if [[ ${#installed_version_by_prefix[@]} -eq 0 ]]; then
+		return 0
+	fi
+
+	hey Updating alternatives
+
+	local highest_priority_prefix
+	highest_priority_prefix=$(highest_priority_prefix)
+
+	local priority
+
+	if [[ -x /usr/bin/ruby ]]; then
+		priority=$(priority /usr "$highest_priority_prefix")
+
+		update_alternatives_for_one_prefix /usr "$priority"
+	fi
+
+	local prefix
+	for prefix in "${!installed_version_by_prefix[@]}"; do
+		priority=$(priority "$prefix" "$highest_priority_prefix")
+
+		update_alternatives_for_one_prefix "$prefix" "$priority"
+	done
+}
+
+remove_alternatives_for_one_prefix() {
+	local prefix=$1
+
+	local program name link path
+
+	program=ruby
+	name=$program
+	link=/usr/local/bin/$name
+	path=$prefix/bin/$name
+
+	update-alternatives --quiet --remove "$name" "$path" &>/dev/null || true
+}
+
+remove_alternatives_for_all() {
+	update-alternatives --quiet --remove-all ruby &>/dev/null || true
+}
+
+# ------------------------------------------------------------------------------
+# Commands
+# ------------------------------------------------------------------------------
+
+synopsis() {
+	echo -e "${help_synopsis[$1]-}" | sed -e 's/^/  /g' >&2
+}
+
+describe() {
+	echo "${help_description[$1]-}" >&2
+	echo >&2
+	synopsis "$1" >&2
+}
+
+usage() {
+	describe "$1"
+	exit 1
+}
+
+help_description[install]="Install Ruby"
+help_synopsis[install]="install [OPTIONS...] VERSION"
+
+command_install() {
+	[[ $# -gt 0 ]] || usage install
+
+	initialize
+
+	ensure_arguments_really_available "$@"
+
+	[[ ${#program_arguments[@]} -eq 0 ]] && fin 'Nothing to install.'
+
+	preflight_checks
+
+	trap 'clean_and_leave_temporary_directory $?' EXIT HUP INT QUIT TERM
+	create_and_enter_temporary_directory
+
+	ruby_depends || die "E: Installing Ruby dependencies failed."
+
+	local version
+	for version in "${program_arguments[@]}"; do
+		ruby_all "$version"
+	done
+
+	update_alternatives_for_all
+}
+
+help_description[uninstall]="Uninstall Ruby"
+help_synopsis[uninstall]="uninstall VERSION"
+
+command_uninstall() {
+	ensure_arguments_really_installed "$@"
+
+	[[ ${#program_arguments[@]} -eq 0 ]] && fin 'Nothing to uninstall.'
+
+	preflight_checks
+
+	local version
+	for version in "${program_arguments[@]}"; do
+		ruby_uninstall "$version"
+		remove_alternatives_for_one_prefix "$(prefix "$version")"
+	done
+}
+
+help_description[switch]="Switch Ruby version"
+help_synopsis[switch]="switch VERSION"
+
+command_switch() {
+	die "Unimplemented command."
+}
+
+help_description[relink]="Relink alternatives"
+help_synopsis[relink]="relink"
+
+command_relink() {
+	die "Unimplemented command."
+}
+
+help_description[unlink]="Unlink alternatives"
+help_synopsis[unlink]="unlink"
+
+command_unlink() {
+	die "Unimplemented command."
+}
+
+help_description[status]="Show status"
+help_synopsis[status]="status"
+
+command_status() {
+	initialize
+
+	print_version_prefix() {
+		local version=$1 prefix=$2
+		printf "%-20s    %s\\n" "$version" "$prefix/bin/ruby"
+	}
+
+	if [[ -x /usr/bin/ruby ]]; then
+		local version
+
+		version=$(PATH=/usr/bin ruby_version)
+		cry 'System Ruby:'
+		cry
+		cry "\\t$(print_version_prefix "$version" /usr)"
+		cry
+	fi
+
+	if [[ ${#installed_version_by_prefix[@]} -eq 0 ]]; then
+		cry 'No Rubies found.  Supported versions:'
+		cry
+
+		local suite
+		for suite in legacy stable unstable; do
+			cry "\\t$(version_by_suite "$suite")"
+		done
+	else
+		cry 'Installed Rubies:'
+		cry
+
+		local prefix path
+		for prefix in "${!installed_version_by_prefix[@]}"; do
+			local version=${installed_version_by_prefix[$prefix]}
+			print_version_prefix "$version" "$prefix"
+		done | sort |
+		while read -r path; do
+			cry "\\t$path"
+		done
+	fi
+}
+
+help_description[help]="Display help"
+help_synopsis[init]="help\\nhelp COMMAND"
+
+command_help() {
+	local -a commands
+
+	mapfile -t commands < <(
+		for name in "${!help_description[@]}"; do
+			echo "$name"
+		done | sort
+	)
+
+	if [[ $# -eq 0 ]]; then
+		echo "Usage: $PROGNAME COMMAND [ARGS...]"
+		echo
+		echo "Commands:"
+		echo
+		for name in "${commands[@]}"; do
+			printf "  %-12s %s\\n" "$name" "${help_description[$name]-}"
+		done
+		echo
+		echo "Run '$PROGNAME help COMMAND' to display synopsis for COMMAND."
+	else
+		describe "$1"
+		echo
+	fi >&2
+
+	echo "See $PROGNAME(1) for details." >&2
+}
+
+# ------------------------------------------------------------------------------
+# Pre/post functions
+# ------------------------------------------------------------------------------
+
+initialize() {
+	available_suite_by_version_initialize
+	installed_version_by_prefix_initialize
+}
+
+ensure_arguments_really_available() {
+	local arg
+
+	local -A seen
+
+	for arg; do
+		local version
+		version=$(canonicalize_available_version "$arg") || die "Unsupported version: $arg"
+		[[ -z ${seen[$version]:-} ]] || continue
+
+		if has_installed "$version"; then
+			cry "Already installed version: $version"
+			continue
+		elif has_occupied "$version"; then
+			die "Unmanaged version found: $version"
+		fi
+
+		program_arguments+=("$version")
+		seen[$version]=true
+	done
+}
+
+ensure_arguments_really_installed() {
+	local arg
+
+	for arg; do
+		local version=$arg
+		if has_installed "$version"; then
+			program_arguments+=("$version")
+		elif has_occupied "$version"; then
+			die "Unmanaged version found: $version"
+		else
+			cry "No such version found: $version"
+			continue
+		fi
+	done
+}
+
+preflight_checks() {
+	[[ $EUID -eq 0 ]] || die "Root privileges required."
+}
+
+create_and_enter_temporary_directory() {
+	export DEBIAN_FRONTEND=noninteractive
+
+	local mktemp
+	for mktemp in /bin/mktemp /usr/bin/mktemp; do
+		if [[ -x $mktemp ]]; then
+			break
+		fi
+		unset -v mktemp
+	done
+	# As a security measure refuse to proceed if mktemp is not available.
+	[[ -n $mktemp ]] || die "$mktemp is not available"
+
+	tmpdir=$("$mktemp" -d -t "$PROGNAME".XXXXXXXX) || die "$mktemp returned error"
+	cleanup_files+=("$tmpdir")
+
+	pushd "$tmpdir" &>/dev/null
+}
+
+clean_and_leave_temporary_directory() {
+	local err=${1:-0}
+
+	hey Cleaning up
+
+	popd &>/dev/null
+
+	rm -rf -- "${cleanup_files[@]}"
+	rm -rf -- "$HOME/.gem"
+
+	if [[ ${#missing_development_packages[@]} -ne 0 ]]; then
+		hey Removing installed packages to build Ruby
+		apt-get -y purge --auto-remove "${missing_development_packages[@]}"
+	fi
+
+	if [[ $err -gt 0 ]] && [[ ${#missing_runtime_packages[@]} -ne 0 ]]; then
+		hey Removing installed packages to run Ruby
+		apt-get -y purge --auto-remove "${missing_runtime_packages[@]}"
+	fi
+
+	return "$err"
+}
+
+# ------------------------------------------------------------------------------
+# Main
+# ------------------------------------------------------------------------------
+
+dispatch() {
+	local cmd=command_$1
+	if [[ $(type -t "$cmd" || true) == function ]]; then
+		echo "$cmd"
+		return 0
+	fi
+	return 1
+}
+
+main() {
+	local func
+
+	if [[ $# -ne 0  ]]; then
+		local arg
+		while [[ $# -gt 0 ]]; do
+			arg=$1
+			shift
+
+			if [[ ! "$arg" =~ ^-.* ]]; then
+				func=$(dispatch "$arg") || die "No command: $arg"
+				break
+			fi
+		done
+
+		[[ -n ${func:-} ]] || die "No command found."
+	else
+		func=$(dispatch help)
+	fi
+
+	"$func" "$@"
+}
+
+[[ "${BASH_SOURCE[0]}" != "${0}" ]] || main "$@"

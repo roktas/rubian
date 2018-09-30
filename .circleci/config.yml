@@ -1,0 +1,28 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: debian:sid
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update -y
+            apt-get install -y git curl ca-certificates shellcheck bats file
+      - run:
+          name: Lint with Shellcheck
+          command: |
+            shellcheck $(find -type f -and -not -path './.git/*' | xargs file --mime-type | grep text/x-shellscript$ | cut -f1 -d:)
+      - run:
+          name: Test with Bats
+          command: bats tests
+      - run:
+          name: Install and uninstall all suites
+          command: |
+            rubian install stable unstable legacy
+            for prefix in /opt/rubies/*; do
+              "$prefix"/bin/ruby -v
+            done
+            ruby -v
+            rubian uninstall stable unstable legacy

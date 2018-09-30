@@ -1,0 +1,49 @@
+rubian(1) -- Debian ve türevi sistemlerde Ruby kur
+==================================================
+
+## ÖZET
+
+`rubian` [<seçenek>...] [<komut> [<argüman>...]<br>
+
+## AÇIKLAMA
+
+**Rubian** aşağıdaki prensiplere uygun bir araçtır. TODO
+
+
+- Sadece Debian ve türevi dağıtımları destekler.
+
+- Sadece MRI'ı destekler.
+
+- Sadece dönemsel olarak geçerli sınırlı sayıda sürümü destekler.
+
+- Sistem genelinde çalışır.
+
+- Debian sistemleriyle entegredir.
+
+- İlave bağımlılığı yoktur.
+
+- Artık bırakmadan kaldırılabilir.
+
+- Kurulan sürümler arası geçişi destekler.
+
+- Jemalloc destekler.
+
+## KOMUTLAR
+
+  * `install SÜRÜM...`:
+    Kurulum yapar
+
+  TODO
+
+## BÖCEKLER
+
+**Rubian** TODO.
+
+## TELİF
+
+Rubian Copyright (C) 2018 [Alaturka
+authors](https://github.com/alaturka/rubian/blob/master/AUTHORS.md#files)
+
+## BAKINIZ
+
+update-alternatives(1)

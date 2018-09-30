@@ -20,9 +20,9 @@ jobs:
       - run:
           name: Install and uninstall all suites
           command: |
-            rubian install stable unstable legacy
+            ./rubian install stable unstable legacy
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done
             ruby -v
-            rubian uninstall stable unstable legacy
+            ./rubian uninstall stable unstable legacy

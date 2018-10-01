@@ -1,8 +1,11 @@
+docker: &docker
+  - image: debian:sid
+    environment:
+      TZ: '/usr/share/zoneinfo/Asia/Istanbul'
 version: 2
 jobs:
-  build:
-    docker:
-      - image: debian:sid
+  tests:
+    docker: *docker
     steps:
       - checkout
       - run:
@@ -17,11 +20,28 @@ jobs:
       - run:
           name: Test with Bats
           command: bats tests
+  ruby-build:
+    docker: *docker
+    steps:
+      - checkout
       - run:
           name: Install and uninstall all suites
           command: |
-            ./rubian install stable unstable legacy
+            PATH=$PWD:$PATH
+
+            rubian install stable unstable legacy
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done
             ruby -v
+workflows:
+  version: 2
+  tests-and-ruby-build:
+    jobs:
+      - tests
+      - ruby-build:
+          requires:
+            - tests
+          filters:
+            branches:
+              only: master

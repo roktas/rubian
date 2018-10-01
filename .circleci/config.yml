@@ -27,14 +27,16 @@ jobs:
       - run:
           name: Install and uninstall all suites
           command: |
-            bash rubian install stable unstable legacy
+            PATH=$PWD:$PATH
+
+            rubian install stable unstable legacy
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done
             ruby -v
 workflows:
   version: 2
-  test-and-ruby-build:
+  tests-and-ruby-build:
     jobs:
       - tests
       - ruby-build:

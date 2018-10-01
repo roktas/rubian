@@ -4,7 +4,7 @@ docker: &docker
       TZ: '/usr/share/zoneinfo/Asia/Istanbul'
 version: 2
 jobs:
-  dependencies:
+  tests:
     docker: *docker
     steps:
       - checkout
@@ -13,9 +13,6 @@ jobs:
           command: |
             apt-get update -y
             apt-get install -y git curl ca-certificates shellcheck bats file
-  tests:
-    docker: *docker
-    steps:
       - run:
           name: Lint with Shellcheck
           command: |
@@ -26,10 +23,11 @@ jobs:
   ruby-build:
     docker: *docker
     steps:
+      - checkout
       - run:
           name: Install and uninstall all suites
           command: |
-            ./rubian install stable unstable legacy
+            bash rubian install stable unstable legacy
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done
@@ -38,10 +36,7 @@ workflows:
   version: 2
   test-and-ruby-build:
     jobs:
-      - dependencies
-      - tests:
-          requires:
-            - dependencies
+      - tests
       - ruby-build:
           requires:
             - tests

@@ -125,7 +125,7 @@ fetch() {
 }
 
 is_inside_docker() {
-	[[ $(grep -c  docker < /proc/1/cgroup 2>/dev/null) -gt 0 ]] || [[ -f /.dockerenv ]]
+	[[ $(grep -c  docker </proc/1/cgroup 2>/dev/null) -gt 0 ]] || [[ -f /.dockerenv ]]
 }
 
 # ------------------------------------------------------------------------------

@@ -607,7 +607,9 @@ help_description[relink]="Relink alternatives"
 help_synopsis[relink]="relink"
 
 command_relink() {
-	die "Unimplemented command."
+	initialize
+	preflight_checks
+	update_alternatives_for_all
 }
 
 help_description[unlink]="Unlink alternatives"

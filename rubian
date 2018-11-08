@@ -84,7 +84,7 @@ declare -Ag unstable=(
 	[version]=2.6.0-preview2
 	[major]=2.6
 	[sha256]=00ddfb5e33dee24469dd0b203597f7ecee66522ebb496f620f5815372ea2d3ec
-	[gem]=2.7.8
+	[gem]=3.0.0.beta1
 	[bundler]=1.17.1
 )
 

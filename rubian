@@ -59,22 +59,22 @@ declare -ag cleanup_files=()
 declare -Ag legacy=(
 	[suite]=legacy
 
-	[version]=2.4.4
+	[version]=2.4.5
 	[major]=2.4
-	[sha256]=1d0034071d675193ca769f64c91827e5f54cb3a7962316a41d5217c7bc6949f0
-	[gem]=2.7.7
-	[bundler]=1.16.5
+	[sha256]=2f0cdcce9989f63ef7c2939bdb17b1ef244c4f384d85b8531d60e73d8cc31eeb
+	[gem]=2.7.8
+	[bundler]=1.17.1
 )
 
 # shellcheck disable=2034
 declare -Ag stable=(
 	[suite]=stable
 
-	[version]=2.5.1
+	[version]=2.5.3
 	[major]=2.5
-	[sha256]=886ac5eed41e3b5fc699be837b0087a6a5a3d10f464087560d2d21b3e71b754d
-	[gem]=2.7.7
-	[bundler]=1.16.5
+	[sha256]=1cc9d0359a8ea35fc6111ec830d12e60168f3b9b305a3c2578357d360fcf306f
+	[gem]=2.7.8
+	[bundler]=1.17.1
 )
 
 # shellcheck disable=2034
@@ -84,8 +84,8 @@ declare -Ag unstable=(
 	[version]=2.6.0-preview2
 	[major]=2.6
 	[sha256]=00ddfb5e33dee24469dd0b203597f7ecee66522ebb496f620f5815372ea2d3ec
-	[gem]=2.7.7
-	[bundler]=1.16.5
+	[gem]=3.0.0.beta1
+	[bundler]=1.17.1
 )
 
 # ------------------------------------------------------------------------------
@@ -157,7 +157,7 @@ available_suite_by_version_initialize() {
 	local suite
 
 	for suite in legacy stable unstable; do
-		local version_ref="$suite[version]"
+		local version_ref="${suite}[version]"
 		local version=${!version_ref}
 
 		available_suite_by_version[$version]=$suite

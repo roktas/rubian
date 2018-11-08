@@ -157,7 +157,7 @@ available_suite_by_version_initialize() {
 	local suite
 
 	for suite in legacy stable unstable; do
-		local version_ref="${suite[version]}"
+		local version_ref="${suite}[version]"
 		local version=${!version_ref}
 
 		available_suite_by_version[$version]=$suite

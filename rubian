@@ -74,7 +74,7 @@ declare -Ag stable=(
 	[major]=2.6
 	[sha256]=acb00f04374899ba8ee74bbbcb9b35c5c6b1fd229f1876554ee76f0f1710ff5f
 	[gem]=3.0.1
-	[bundler]=1.17.2
+	[bundler]=2.0.1
 )
 
 # shellcheck disable=2034
@@ -85,7 +85,7 @@ declare -Ag unstable=(
 	[major]=2.6
 	[sha256]=acb00f04374899ba8ee74bbbcb9b35c5c6b1fd229f1876554ee76f0f1710ff5f
 	[gem]=3.0.1
-	[bundler]=2.0.0.pre.2
+	[bundler]=2.0.1
 )
 
 # ------------------------------------------------------------------------------

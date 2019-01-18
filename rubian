@@ -212,7 +212,7 @@ canonicalize_available_version() {
 ruby_fetch() {
 	local version=$1
 
-	hey Fetching "$version" #&& return 0
+	hey Fetching "$version"
 
 	local suite=${available_suite_by_version[$version]}
 
@@ -228,7 +228,7 @@ ruby_fetch() {
 }
 
 ruby_depends() {
-	hey Installing dependencies #&& return 0
+	hey Installing dependencies
 
 	apt-get -y update
 
@@ -274,7 +274,7 @@ ruby_depends() {
 ruby_build() {
 	local version=$1
 
-	hey Building "$version" #&& return 0
+	hey Building "$version"
 
 	local prefix
 	prefix=$(prefix "$version")

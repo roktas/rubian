@@ -768,7 +768,7 @@ clean_and_leave_temporary_directory() {
 	popd &>/dev/null
 
 	rm -rf -- "${cleanup_files[@]}"
-	rm -rf -- "$HOME/.gem"
+	rm -rf -- ~/.gem
 
 	if [[ $err -gt 0 ]] && [[ ${#missing_development_packages[@]} -ne 0 ]]; then
 		hey Removing installed packages to build Ruby

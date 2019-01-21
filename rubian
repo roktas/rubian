@@ -325,6 +325,14 @@ ruby_install() {
 	gzip -9 "$prefix"/share/man/man1/*.1 &>/dev/null || true
 }
 
+ruby_gems_update() {
+	command -v gem &>/dev/null || return 0
+
+	hey Updating RubyGems
+
+	gem update --system
+}
+
 ruby_purge() {
 	local version=$1
 
@@ -577,6 +585,8 @@ command_install() {
 	done
 
 	update_alternatives_for_all
+
+	ruby_gems_update
 }
 
 help_description[uninstall]="Uninstall Ruby"
@@ -594,6 +604,8 @@ command_uninstall() {
 		ruby_uninstall "$version"
 		remove_alternatives_for_one_prefix "$(prefix "$version")"
 	done
+
+	ruby_gems_update
 }
 
 help_description[switch]="Switch Ruby version"

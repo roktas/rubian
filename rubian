@@ -68,12 +68,12 @@ declare -Ag legacy=(
 
 # shellcheck disable=2034
 declare -Ag stable=(
-	[suite]=stable
+	[suite]=unstable
 
-	[version]=2.6.1
+	[version]=2.6.2
 	[major]=2.6
-	[sha256]=47b629808e9fd44ce1f760cdf3ed14875fc9b19d4f334e82e2cf25cb2898f2f2
-	[gem]=3.1.0
+	[sha256]=91fcde77eea8e6206d775a48ac58450afe4883af1a42e5b358320beb33a445fa
+	[gem]=3.0.3
 	[bundler]=2.0.1
 )
 
@@ -81,10 +81,10 @@ declare -Ag stable=(
 declare -Ag unstable=(
 	[suite]=unstable
 
-	[version]=2.6.1
+	[version]=2.6.2
 	[major]=2.6
-	[sha256]=47b629808e9fd44ce1f760cdf3ed14875fc9b19d4f334e82e2cf25cb2898f2f2
-	[gem]=3.1.0
+	[sha256]=91fcde77eea8e6206d775a48ac58450afe4883af1a42e5b358320beb33a445fa
+	[gem]=3.0.3
 	[bundler]=2.0.1
 )
 

@@ -17,15 +17,28 @@ readonly SHIBBOLETH=.rubian
 # Root directory for all Ruby installations
 readonly RUBIES=${RUBIES:-/opt/rubies}
 
+readonly UPSTREAM=https://cache.ruby-lang.org/pub/ruby/index.txt
+
+readonly PACKAGE='tar.xz'
+
+
 # ------------------------------------------------------------------------------
 # Globals
 # ------------------------------------------------------------------------------
 
-# Installed Ruby versions keyed by installation directories (aka prefix)
-declare -Ag installed_version_by_prefix=()
+declare -g alternatives_prefix=/usr/local
 
-# Available Ruby suites (e.g. stable) to install keyed by Ruby versions
-declare -Ag available_suite_by_version=()
+# Available versions keyed by version specifiers
+declare -Ag available_version_by_string=()
+
+# Upstream Ruby urls keyed by available versions
+declare -Ag available_url_by_version=()
+
+# SHA256 checksums keyed by available versions
+declare -Ag available_sha_by_version=()
+
+# Installed Ruby versions keyed by installation directories (aka installation_prefix)
+declare -Ag installed_version_by_prefix=()
 
 # Missing Debian packages required to build Ruby
 declare -ag missing_development_packages=()
@@ -37,7 +50,7 @@ declare -ag missing_runtime_packages=()
 declare -ag ruby_configure_arguments=()
 
 # Slave programs of Ruby when creating alternative links
-declare -ag ruby_slave_programs=(gem rake ri erb irb rdoc)
+declare -ag ruby_slave_programs=(bundler bundle gem rake ri erb irb rdoc)
 
 # Description and synopsis for command help
 declare -Ag help_description help_synopsis
@@ -50,43 +63,6 @@ declare -ag program_arguments=()
 
 # Temporary files to cleanup on exit
 declare -ag cleanup_files=()
-
-# ------------------------------------------------------------------------------
-# Supported Ruby suites
-# ------------------------------------------------------------------------------
-
-# shellcheck disable=2034
-declare -Ag legacy=(
-	[suite]=legacy
-
-	[version]=2.5.3
-	[major]=2.5
-	[sha256]=1cc9d0359a8ea35fc6111ec830d12e60168f3b9b305a3c2578357d360fcf306f
-	[gem]=3.0.0
-	[bundler]=1.17.1
-)
-
-# shellcheck disable=2034
-declare -Ag stable=(
-	[suite]=unstable
-
-	[version]=2.6.2
-	[major]=2.6
-	[sha256]=91fcde77eea8e6206d775a48ac58450afe4883af1a42e5b358320beb33a445fa
-	[gem]=3.0.3
-	[bundler]=2.0.1
-)
-
-# shellcheck disable=2034
-declare -Ag unstable=(
-	[suite]=unstable
-
-	[version]=2.6.2
-	[major]=2.6
-	[sha256]=91fcde77eea8e6206d775a48ac58450afe4883af1a42e5b358320beb33a445fa
-	[gem]=3.0.3
-	[bundler]=2.0.1
-)
 
 # ------------------------------------------------------------------------------
 # Helpers
@@ -132,7 +108,7 @@ is_inside_docker() {
 # Version data structures
 # ------------------------------------------------------------------------------
 
-installed_version_by_prefix_initialize() {
+load_available() {
 	[[ -d $RUBIES ]] || return 0
 
 	local -a versions
@@ -144,32 +120,15 @@ installed_version_by_prefix_initialize() {
 		done
 	)
 
-	local prefix
-	local version
+	local version prefix
 
 	for version in "${versions[@]}"; do
-		prefix=$(prefix "$version")
+		prefix=$(installation_prefix "$version")
 		installed_version_by_prefix[$prefix]=$version
 	done
 }
 
-available_suite_by_version_initialize() {
-	local suite
-
-	for suite in legacy stable unstable; do
-		local version_ref="${suite}[version]"
-		local version=${!version_ref}
-
-		available_suite_by_version[$version]=$suite
-	done
-
-	local attr
-	for attr in version major sha256 gem bundler; do
-		eval -- "${attr}_by_suite"'() { local ref=$1['"$attr"']; echo "${!ref}"; }'
-	done
-}
-
-prefix() {
+installation_prefix() {
 	local version=$1
 
 	echo "$RUBIES/$version"
@@ -179,7 +138,7 @@ has_occupied() {
 	local version=$1
 
 	local prefix
-	prefix=$(prefix "$version")
+	prefix=$(installation_prefix "$version")
 
 	[[ -d $prefix ]] && [[ ! -e $prefix/$SHIBBOLETH ]]
 }
@@ -187,22 +146,7 @@ has_occupied() {
 has_installed() {
 	local version=$1
 
-	[[ -e $(prefix "$version")/$SHIBBOLETH ]]
-}
-
-canonicalize_available_version() {
-	local versionish=$1
-
-	case $versionish in
-	legacy|stable|unstable)
-		version_by_suite "$versionish"
-		;;
-	[0-9]*)
-		echo "$versionish"
-		;;
-	*)
-		return 1
-	esac
+	[[ -e $(installation_prefix "$version")/$SHIBBOLETH ]]
 }
 
 # ------------------------------------------------------------------------------
@@ -214,20 +158,18 @@ ruby_fetch() {
 
 	hey Fetching "$version"
 
-	local suite=${available_suite_by_version[$version]}
+	local url=${available_url_by_version[$version]}
+	local sha=${available_sha_by_version[$version]}
 
-	local major sha256
-
-	major=$(major_by_suite "$suite")
-	sha256=$(sha256_by_suite "$suite")
-
-	fetch "https://cache.ruby-lang.org/pub/ruby/${major}/ruby-${version}.tar.xz" ruby.tar.xz
-	echo "$sha256 *ruby.tar.xz" | sha256sum -c - || die "Checksum error"
+	fetch "$url" ruby.tar.xz
+	echo "$sha *ruby.tar.xz" | sha256sum -c - || die "Checksum error"
 	tar -xJf ruby.tar.xz -C . --strip-components=1
 	rm -f ruby.tar.xz
 }
 
 ruby_depends() {
+	local version=$1
+
 	hey Installing dependencies
 
 	apt-get -y update
@@ -240,10 +182,18 @@ ruby_depends() {
 		libgdbm-dev
 		libncurses-dev
 		libreadline-dev
-		libssl-dev
 		libyaml-dev
 		zlib1g-dev
 	)
+
+	case $version in
+	2.[0-3].*)
+		development_packages+=(libssl1.0-dev)
+		;;
+	*)
+		development_packages+=(libssl-dev)
+		;;
+	esac
 
 	local -a runtime_packages+=()
 
@@ -277,7 +227,7 @@ ruby_build() {
 	hey Building "$version"
 
 	local prefix
-	prefix=$(prefix "$version")
+	prefix=$(installation_prefix "$version")
 
 	ruby_configure_arguments=(
 		'--disable-install-doc'
@@ -305,22 +255,15 @@ ruby_install() {
 	make install
 
 	local prefix
-	prefix=$(prefix "$version")
-
-	local suite=${available_suite_by_version[$version]}
+	prefix=$(installation_prefix "$version")
 
 	mkdir -p "$prefix"/etc
 	cat >"$prefix"/etc/gemrc <<-EOF
-		gem: --no-document --bindir /usr/local/bin
+		gem: --no-document --bindir $alternatives_prefix/bin
 	EOF
 
-	local gem bundler
-
-	gem=$(gem_by_suite "$suite")
-	bundler=$(bundler_by_suite "$suite")
-
-	"$prefix"/bin/gem update --system "$gem"
-	"$prefix"/bin/gem install bundler --version "$bundler" --force
+	"$prefix"/bin/gem update --system
+	"$prefix"/bin/gem install --force --bindir "$prefix"/bin bundler
 
 	gzip -9 "$prefix"/share/man/man1/*.1 &>/dev/null || true
 }
@@ -337,7 +280,7 @@ ruby_purge() {
 	local version=$1
 
 	local prefix
-	prefix=$(prefix "$version")
+	prefix=$(installation_prefix "$version")
 
 	[[ -d $prefix ]] || return 0
 
@@ -348,18 +291,18 @@ ruby_register() {
 	local version=$1
 
 	local prefix
-	prefix=$(prefix "$version")
+	prefix=$(installation_prefix "$version")
 
 	touch "$prefix/$SHIBBOLETH"
 
-	installed_version_by_prefix["$(prefix "$version")"]=$version
+	installed_version_by_prefix["$(installation_prefix "$version")"]=$version
 }
 
 ruby_unregister() {
 	local version=$1
 
 	local prefix
-	prefix=$(prefix "$version")
+	prefix=$(installation_prefix "$version")
 
 	rm -f -- "$prefix/$SHIBBOLETH"
 
@@ -376,9 +319,7 @@ ruby_uninstall() {
 ruby_all() {
 	local version=$1
 
-	local suite=${available_suite_by_version[$version]}
-
-	mkdir -p "$suite" && pushd "$suite" &>/dev/null
+	mkdir -p "$version" && pushd "$version" &>/dev/null
 
 	ruby_fetch "$version" || die "E: Fetching Ruby '$version' failed."
 	ruby_build "$version" || die "E: Building Ruby '$version' failed."
@@ -391,7 +332,7 @@ ruby_all() {
 	fi
 
 
-	popd &>/dev/null && rm -rf -- "$suite"
+	popd &>/dev/null && rm -rf -- "$version"
 }
 
 ruby_version() {
@@ -468,7 +409,7 @@ update_alternatives_for_one_prefix() {
 
 	program=ruby
 	name=$program
-	link=/usr/local/bin/$name
+	link=$alternatives_prefix/bin/$name
 	path=$prefix/bin/$name
 
 	[[ -x $path ]] || return 0
@@ -480,13 +421,13 @@ update_alternatives_for_one_prefix() {
 
 	for program in "${ruby_slave_programs[@]}"; do
 		name=$program
-		link=/usr/local/bin/$name
+		link=$alternatives_prefix/bin/$name
 		path=$prefix/bin/$name
 
 		[[ -x $path ]] && args+=('--slave' "$link" "$name" "$path")
 
 		name=$program.1.gz
-		link=/usr/local/share/man/man1/$name
+		link=$alternatives_prefix/share/man/man1/$name
 		path=$prefix/share/man/man1/$name
 
 		if [[ -e $path ]]; then
@@ -531,7 +472,7 @@ remove_alternatives_for_one_prefix() {
 
 	program=ruby
 	name=$program
-	link=/usr/local/bin/$name
+	link=$alternatives_prefix/bin/$name
 	path=$prefix/bin/$name
 
 	update-alternatives --quiet --remove "$name" "$path" &>/dev/null || true
@@ -566,7 +507,7 @@ help_synopsis[install]="install [OPTIONS...] VERSION"
 command_install() {
 	[[ $# -gt 0 ]] || usage install
 
-	initialize
+	load_available_and_installed
 
 	ensure_arguments_really_available "$@"
 
@@ -577,10 +518,9 @@ command_install() {
 	trap 'clean_and_leave_temporary_directory $?' EXIT HUP INT QUIT TERM
 	create_and_enter_temporary_directory
 
-	ruby_depends || die "E: Installing Ruby dependencies failed."
-
 	local version
 	for version in "${program_arguments[@]}"; do
+		ruby_depends "$version" || die "E: Installing Ruby dependencies failed."
 		ruby_all "$version"
 	done
 
@@ -602,7 +542,7 @@ command_uninstall() {
 	local version
 	for version in "${program_arguments[@]}"; do
 		ruby_uninstall "$version"
-		remove_alternatives_for_one_prefix "$(prefix "$version")"
+		remove_alternatives_for_one_prefix "$(installation_prefix "$version")"
 	done
 
 	ruby_gems_update
@@ -612,14 +552,27 @@ help_description[switch]="Switch Ruby version"
 help_synopsis[switch]="switch VERSION"
 
 command_switch() {
-	die "Unimplemented command."
+	[[ $# -gt 1 ]] || usage switch
+
+	local version=$1
+
+	load_installed
+
+	ensure_arguments_really_installed "$version"
+
+	local name path
+
+	name=ruby
+	path=$(installation_prefix "$version")
+
+	update-alternatives --set "$name" "$path"
 }
 
 help_description[relink]="Relink alternatives"
 help_synopsis[relink]="relink"
 
 command_relink() {
-	initialize
+	load_available_and_installed
 	preflight_checks
 	update_alternatives_for_all
 }
@@ -635,7 +588,7 @@ help_description[status]="Show status"
 help_synopsis[status]="status"
 
 command_status() {
-	initialize
+	load_available_and_installed
 
 	print_version_prefix() {
 		local version=$1 prefix=$2
@@ -709,20 +662,60 @@ command_help() {
 # Pre/post functions
 # ------------------------------------------------------------------------------
 
-initialize() {
-	available_suite_by_version_initialize
-	installed_version_by_prefix_initialize
+load_installed() {
+	local -a index=()
+	mapfile -t index < <(curl -fsSL "$UPSTREAM" | tac)
+
+	local -a schema
+	read -ra schema <<<"${index[-1]}"
+
+	echo "${schema[@]}" | grep -qwE 'sha512' || die 'Unrecognized index'
+
+	local line
+	for line in "${index[@]}"; do
+		local -a fields
+		read -ra fields <<<"$line"
+
+		declare -A info=()
+
+		local field i=0
+		for field in "${fields[@]}"; do
+			info["${schema[$i]}"]="$field"
+			i=$((i + 1))
+		done
+
+		local version=${info[name]#ruby-}
+		local major=${version%.*}
+
+		[[ $version =~ ^[2-3].+ ]]             || continue
+		[[ ${info[url]:-} =~ [.]${PACKAGE}$ ]] || continue
+
+		available_version_by_string[$version]=$version
+		[[ -n ${available_version_by_string[latest]:-} ]] || available_version_by_string[latest]=$version
+		[[ -n ${available_version_by_string[$major]:-} ]] || available_version_by_string[$major]=$version
+
+		available_url_by_version[$version]=${info[url]}
+		available_sha_by_version[$version]=${info[sha256]}
+	done
+}
+
+curl() {
+	cat index.txt
+}
+
+load_available_and_installed() {
+	load_available
+	load_installed
 }
 
 ensure_arguments_really_available() {
-	local arg
-
 	local -A seen
 
-	for arg; do
-		local version
-		version=$(canonicalize_available_version "$arg") || die "Unsupported version: $arg"
+	local version
+	for version; do
 		[[ -z ${seen[$version]:-} ]] || continue
+
+		[[ -n ${available_version_by_string[$version]:-} ]] || die "Unsupported version: $version"
 
 		if has_installed "$version"; then
 			cry "Already installed version: $version"
@@ -737,10 +730,8 @@ ensure_arguments_really_available() {
 }
 
 ensure_arguments_really_installed() {
-	local arg
-
-	for arg; do
-		local version=$arg
+	local version
+	for version; do
 		if has_installed "$version"; then
 			program_arguments+=("$version")
 		elif has_occupied "$version"; then

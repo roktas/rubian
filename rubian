@@ -109,6 +109,45 @@ is_inside_docker() {
 # ------------------------------------------------------------------------------
 
 load_available() {
+	hey Fetching available Ruby versions
+
+	local -a index=()
+	mapfile -t index < <(curl -fsSL "$UPSTREAM" | tac)
+
+	local -a schema
+	read -ra schema <<<"${index[-1]}"
+
+	echo "${schema[@]}" | grep -qwE 'sha512' || die 'Unrecognized index'
+
+	local line
+	for line in "${index[@]}"; do
+		local -a fields
+		read -ra fields <<<"$line"
+
+		declare -A info=()
+
+		local field i=0
+		for field in "${fields[@]}"; do
+			info["${schema[$i]}"]="$field"
+			i=$((i + 1))
+		done
+
+		local version=${info[name]#ruby-}
+		local major=${version%.*}
+
+		[[ $version =~ ^[2-3].+ ]]             || continue
+		[[ ${info[url]:-} =~ [.]${PACKAGE}$ ]] || continue
+
+		available_version_by_string[$version]=$version
+		[[ -n ${available_version_by_string[latest]:-} ]] || available_version_by_string[latest]=$version
+		[[ -n ${available_version_by_string[$major]:-} ]] || available_version_by_string[$major]=$version
+
+		available_url_by_version[$version]=${info[url]}
+		available_sha_by_version[$version]=${info[sha256]}
+	done
+}
+
+load_installed() {
 	[[ -d $RUBIES ]] || return 0
 
 	local -a versions
@@ -505,11 +544,16 @@ help_description[install]="Install Ruby"
 help_synopsis[install]="install [OPTIONS...] VERSION"
 
 command_install() {
-	[[ $# -gt 0 ]] || usage install
+	local -a versions=("$@")
+
+	if [[ $# -eq 0 ]]; then
+		hey Selecting latest version to install
+		versions+=(latest)
+	fi
 
 	load_available_and_installed
 
-	ensure_arguments_really_available "$@"
+	ensure_arguments_really_available "${versions[@]}"
 
 	[[ ${#program_arguments[@]} -eq 0 ]] && fin 'Nothing to install.'
 
@@ -662,47 +706,6 @@ command_help() {
 # Pre/post functions
 # ------------------------------------------------------------------------------
 
-load_installed() {
-	local -a index=()
-	mapfile -t index < <(curl -fsSL "$UPSTREAM" | tac)
-
-	local -a schema
-	read -ra schema <<<"${index[-1]}"
-
-	echo "${schema[@]}" | grep -qwE 'sha512' || die 'Unrecognized index'
-
-	local line
-	for line in "${index[@]}"; do
-		local -a fields
-		read -ra fields <<<"$line"
-
-		declare -A info=()
-
-		local field i=0
-		for field in "${fields[@]}"; do
-			info["${schema[$i]}"]="$field"
-			i=$((i + 1))
-		done
-
-		local version=${info[name]#ruby-}
-		local major=${version%.*}
-
-		[[ $version =~ ^[2-3].+ ]]             || continue
-		[[ ${info[url]:-} =~ [.]${PACKAGE}$ ]] || continue
-
-		available_version_by_string[$version]=$version
-		[[ -n ${available_version_by_string[latest]:-} ]] || available_version_by_string[latest]=$version
-		[[ -n ${available_version_by_string[$major]:-} ]] || available_version_by_string[$major]=$version
-
-		available_url_by_version[$version]=${info[url]}
-		available_sha_by_version[$version]=${info[sha256]}
-	done
-}
-
-curl() {
-	cat index.txt
-}
-
 load_available_and_installed() {
 	load_available
 	load_installed
@@ -711,11 +714,12 @@ load_available_and_installed() {
 ensure_arguments_really_available() {
 	local -A seen
 
-	local version
-	for version; do
-		[[ -z ${seen[$version]:-} ]] || continue
+	local arg
+	for arg; do
+		local version=${available_version_by_string[$arg]:-}
+		[[ -n ${version:-} ]] || die "Unsupported version: $version"
 
-		[[ -n ${available_version_by_string[$version]:-} ]] || die "Unsupported version: $version"
+		[[ -z ${seen[$version]:-} ]] || continue
 
 		if has_installed "$version"; then
 			cry "Already installed version: $version"

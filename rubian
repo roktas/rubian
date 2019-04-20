@@ -301,8 +301,15 @@ ruby_install() {
 		gem: --no-document --bindir $alternatives_prefix/bin
 	EOF
 
-	"$prefix"/bin/gem update --system
-	"$prefix"/bin/gem install --force --bindir "$prefix"/bin bundler
+	case $version in
+	2.[0-3].*)
+		"$prefix"/bin/gem install --force --bindir "$prefix"/bin --version '< 2' bundler
+		;;
+	*)
+		"$prefix"/bin/gem update --system
+		"$prefix"/bin/gem install --force --bindir "$prefix"/bin bundler
+		;;
+	esac
 
 	gzip -9 "$prefix"/share/man/man1/*.1 &>/dev/null || true
 }

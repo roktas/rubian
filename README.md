@@ -124,3 +124,5 @@ License
 -------
 
 Rubian Copyright (C) 2019 [Alaturka Authors](https://github.com/alaturka).
+
+[![CircleCI](https://circleci.com/gh/omu/rubian.svg)](https://circleci.com/gh/omu/rubian)

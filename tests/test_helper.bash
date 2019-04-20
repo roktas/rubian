@@ -29,6 +29,8 @@ inject_ruby_stubs() {
 		touch "$prefix/$SHIBBOLETH"
 
 		local prog
+
+		# shellcheck disable=2154
 		for prog in ruby "${ruby_slave_programs[@]}"; do
 			local path=$prefix/bin/$prog
 			cat >"$path" <<-PROG

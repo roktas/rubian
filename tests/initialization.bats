@@ -69,3 +69,27 @@ teardown() {
 
 	[[ ${lines[0]} = '2.6.3' ]]
 }
+
+@test 'Support only >= 2.1.3' {
+	run bash -s <<-'EOF'
+		. ./rubian && inject_ruby_stubs
+
+		load_available 2>/dev/null
+
+		echo ${available_version_by_string[2.0]:-none}
+		echo ${available_version_by_string[2.1.0]:-none}
+		echo ${available_version_by_string[2.1.1]:-none}
+		echo ${available_version_by_string[2.1.2]:-none}
+		echo ${available_version_by_string[2.1.3]:-none}
+		echo ${available_version_by_string[2.1]:-none}
+	EOF
+
+	assert_success
+
+	[[ ${lines[0]} = 'none'  ]]
+	[[ ${lines[1]} = 'none'  ]]
+	[[ ${lines[2]} = 'none'  ]]
+	[[ ${lines[3]} = 'none'  ]]
+	[[ ${lines[4]} = '2.1.3' ]]
+	[[ ${lines[5]} = '2.1.9' ]]
+}

@@ -162,8 +162,9 @@ load_available() {
 		local version=${info[name]#ruby-}
 		local major=${version%.*}
 
-		[[ $version =~ ^[2-3].+ ]]             || continue
-		[[ ${info[url]:-} =~ [.]${PACKAGE}$ ]] || continue
+		[[ $version =~ ^2[.][^0]+ ]]             || continue # support > 2.1 versions
+		[[ $version =~ ^3[.]      ]]             || continue # support future versions
+		[[ ${info[url]:-} =~ [.]${PACKAGE}$ ]]   || continue # select suitable package format
 
 		available_version_by_string[$version]=$version
 		[[ -n ${available_version_by_string[latest]:-} ]] || available_version_by_string[latest]=$version
@@ -266,7 +267,8 @@ ruby_depends() {
 	)
 
 	case $version in
-	2.[0-3].*)
+	2.[1-3].*)
+		# legacy Ruby versions
 		development_packages+=(libssl1.0-dev)
 		;;
 	*)

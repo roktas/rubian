@@ -37,7 +37,7 @@ jobs:
           command: |
             PATH=$PWD:$PATH
 
-            rubian install 2.0
+            rubian install 2.1
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done

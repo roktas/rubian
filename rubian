@@ -528,6 +528,21 @@ remove_alternatives_for_all() {
 	update-alternatives --quiet --remove-all ruby &>/dev/null || true
 }
 
+set_alternative() {
+	load_installed
+
+	local version=$1
+
+	ensure_arguments_really_installed "$version"
+
+	local name path
+
+	name=ruby
+	path=$(installation_prefix "$version")/bin/ruby
+
+	update-alternatives --force --set "$name" "$path"
+}
+
 # ------------------------------------------------------------------------------
 # Commands
 # ------------------------------------------------------------------------------
@@ -604,18 +619,7 @@ help_synopsis[switch]="switch VERSION"
 command_switch() {
 	[[ $# -eq 1 ]] || usage switch
 
-	load_installed
-
-	local version=$1
-
-	ensure_arguments_really_installed "$version"
-
-	local name path
-
-	name=ruby
-	path=$(installation_prefix "$version")/bin/ruby
-
-	update-alternatives --force --set "$name" "$path"
+	set_alternative "$1"
 }
 
 help_description[relink]="Relink alternatives"

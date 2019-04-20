@@ -5,19 +5,21 @@ Rubian, Ruby ve Debian isimlerinden türetilmiş bir kısaltmadır. Debian ve t�
 dağıtımlara desteklenen, sınırlı sayıdaki Ruby sürümümlerini kurmak, versiyonlar
 arasındaki geçişi yönetmek ve güncellemeleri almak için geliştirilmiştir.
 
-Mevcut sürümdeki özellikler
+Mevcut sürümdeki özellikler:
 
+- Sadece Debian ve türevi dağıtımları destekler
 - Sistem geneli çalışır
 - Sadece MRI (the gold standard) için kullanılabilir
 - [`jemalloc`](http://jemalloc.net) destekler
+- İlave bağımlılığı yoktur
+- Artık bırakmadan kaldırılabilir
+- Kurulan sürümler arası geçişi destekler
 
-Rubian, Ruby ile birlikte `rubygems` ve `bundler` kurar. Bunlar için aşağıdaki
-üç tip sürümü destekler.
+Anti özellikler:
 
-- `stable`, en güncel sürümleri kurar
-- `unstable`, henüz kararlı sürümü yayınlanmamış (pre-released, alpha, beta)
-  sürümleri kurar
-- `legacy`, bir önceki sürümün son kararlı "patch"ini kurar
+- Rbenv veya RVM gibi ortam değişkenlerine bağlı olarak kullanıcı veya proje
+  özelinde çalışmaz
+- Tüm Ruby sürümlerini desteklemez.  Sadece 2.0 ve üstü sürümleri destekler.
 
 Kurulum
 -------
@@ -48,36 +50,74 @@ rubian COMMAND [ARGS...]
 
 Komutların tam listesi için `rubian help` kullanın.
 
-### Ruby kurma
+### Ruby kur
 
 ```sh
-rubian install [OPTIONS...] VERSION
+rubian install [OPTIONS...] VERSION...
 ```
 
-- `VERSION` argümanı için sadece aşağıdaki seçenekler geçerlidir.
+`VERSION` argümanı olarak:
 
-  - `stable`
-  - `unstable`
-  - `legacy`
-
-- Güncel sürüm kurmak için
+- Tam sürüm numarası girebilirsiniz.
 
   ```sh
-  rubian install stable
+  rubian install 2.6.1
   ```
 
-### Ruby kaldırma
+  Ruby 2.6.1 sürümünü kur ve seç.
+
+- Majör sürüm numarası girebilirsiniz.
+
+  ```sh
+  rubian install 2.5
+  ```
+
+  Ruby 2.5.x serisinin en güncelini (2.5.5) kur ve seç.
+
+- En güncel sürümü belirtmek için `latest` girebilirsiniz.
+
+  ```sh
+  rubian install latest
+  ```
+
+  En güncel Ruby sürümünü kur ve seç.
+
+- Birden fazla sürüm numarası girebilirsiniz.
+
+  ```sh
+  rubian install latest 2.5.1
+  ```
+
+  En güncel sürümü ve 2.5.1 sürümünü kur, 2.5.1 sürümünü seç.
+
+### Ruby kaldır
 
 ```sh
-rubian uninstall VERSION
+rubian uninstall VERSION...
 ```
 
-### Mevcut sürüm
+### Durumu görüntüle
 
-Sistemde kurulu ve kullanılan sürümü görüntülemek için
+Sistemde kurulu ve kullanılan sürümü görüntülemek için:
 
 ```sh
 rubian status
+```
+
+### Sürüm değiştir
+
+Ruby sürümünü (sistem genelinde) değiştirmek için:
+
+```sh
+rubian switch VERSION
+```
+
+### Linkleri tazele
+
+Sistem geneli Ruby linklerinde yaşanabilecek bozulmaları düzeltmek için:
+
+```sh
+rubian relink
 ```
 
 License

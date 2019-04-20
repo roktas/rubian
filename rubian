@@ -460,6 +460,8 @@ update_alternatives_for_one_prefix() {
 
 	[[ -x $path ]] || return 0
 
+	hey "$path"
+
 	local -a args
 
 	args+=('--install' "$link" "$name" "$path")
@@ -486,9 +488,7 @@ update_alternatives_for_one_prefix() {
 }
 
 update_alternatives_for_all() {
-	if [[ ${#installed_version_by_prefix[@]} -eq 0 ]]; then
-		return 0
-	fi
+	[[ ${#installed_version_by_prefix[@]} -ne 0 ]] || return 0
 
 	hey Updating alternatives
 
@@ -548,19 +548,14 @@ usage() {
 }
 
 help_description[install]="Install Ruby"
-help_synopsis[install]="install [OPTIONS...] VERSION"
+help_synopsis[install]="install [OPTIONS...] VERSION..."
 
 command_install() {
-	local -a versions=("$@")
-
-	if [[ $# -eq 0 ]]; then
-		hey Selecting latest version to install
-		versions+=(latest)
-	fi
+	[[ $# -gt 0 ]] || usage install
 
 	load_available_and_installed
 
-	ensure_arguments_really_available "${versions[@]}"
+	ensure_arguments_really_available "$@"
 
 	[[ ${#program_arguments[@]} -eq 0 ]] && fin 'Nothing to install.'
 
@@ -577,13 +572,17 @@ command_install() {
 
 	update_alternatives_for_all
 
+	set_alternative "${program_arguments[-1]}"
+
 	ruby_gems_update
 }
 
 help_description[uninstall]="Uninstall Ruby"
-help_synopsis[uninstall]="uninstall VERSION"
+help_synopsis[uninstall]="uninstall VERSION..."
 
 command_uninstall() {
+	[[ $# -gt 0 ]] || usage uninstall
+
 	ensure_arguments_really_installed "$@"
 
 	[[ ${#program_arguments[@]} -eq 0 ]] && fin 'Nothing to uninstall.'
@@ -603,27 +602,27 @@ help_description[switch]="Switch Ruby version"
 help_synopsis[switch]="switch VERSION"
 
 command_switch() {
-	[[ $# -gt 1 ]] || usage switch
-
-	local version=$1
+	[[ $# -eq 1 ]] || usage switch
 
 	load_installed
+
+	local version=$1
 
 	ensure_arguments_really_installed "$version"
 
 	local name path
 
 	name=ruby
-	path=$(installation_prefix "$version")
+	path=$(installation_prefix "$version")/bin/ruby
 
-	update-alternatives --set "$name" "$path"
+	update-alternatives --force --set "$name" "$path"
 }
 
 help_description[relink]="Relink alternatives"
 help_synopsis[relink]="relink"
 
 command_relink() {
-	load_available_and_installed
+	load_installed
 	preflight_checks
 	update_alternatives_for_all
 }

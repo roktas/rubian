@@ -1,11 +1,11 @@
-docker: &docker
+docker: &sid
   - image: debian:sid
     environment:
       TZ: '/usr/share/zoneinfo/Asia/Istanbul'
 version: 2
 jobs:
   tests:
-    docker: *docker
+    docker: *sid
     steps:
       - checkout
       - run:
@@ -20,8 +20,11 @@ jobs:
       - run:
           name: Test with Bats
           command: bats tests
-  ruby-build:
-    docker: *docker
+  legacy:
+    docker:
+      - image: debian:stretch
+        environment:
+          TZ: '/usr/share/zoneinfo/Asia/Istanbul'
     steps:
       - checkout
       - run:
@@ -30,21 +33,46 @@ jobs:
             apt-get update -y
             apt-get install -y git curl ca-certificates
       - run:
-          name: Install and uninstall sample versions
+          name: Install legacy ruby version
           command: |
             PATH=$PWD:$PATH
 
-            rubian install latest 2.1
+            rubian install 2.0
+            for prefix in /opt/rubies/*; do
+              "$prefix"/bin/ruby -v
+            done
+            ruby -v
+  latest:
+    docker: *sid
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update -y
+            apt-get install -y git curl ca-certificates
+      - run:
+          name: Install latest ruby version
+          command: |
+            PATH=$PWD:$PATH
+
+            rubian install latest
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done
             ruby -v
 workflows:
   version: 2
-  tests-and-ruby-build:
+  test-and-build:
     jobs:
       - tests
-      - ruby-build:
+      - legacy:
+          requires:
+            - tests
+          filters:
+            branches:
+              only: master
+      - latest:
           requires:
             - tests
           filters:

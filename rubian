@@ -233,6 +233,19 @@ ruby_fetch() {
 	rm -f ruby.tar.xz
 }
 
+find_suitable_jemalloc() {
+	local libjemalloc
+
+	for libjemalloc in libjemalloc2 libjemalloc1; do
+		if apt-get install -s "$libjemalloc" &>/dev/null; then
+			echo "$libjemalloc"
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 ruby_depends() {
 	local version=$1
 
@@ -264,8 +277,11 @@ ruby_depends() {
 	local -a runtime_packages+=()
 
 	if [[ -z ${program_configuration[without_jemalloc]:-} ]]; then
-		runtime_packages+=(libjemalloc1)
-		development_packages+=(libjemalloc-dev)
+		local libjemalloc
+		if libjemalloc=$(find_suitable_jemalloc) && [[ -n ${libjemalloc:-} ]]; then
+			runtime_packages+=("$libjemalloc")
+			development_packages+=(libjemalloc-dev)
+		fi
 	fi
 
 	local package

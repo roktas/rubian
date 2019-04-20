@@ -354,7 +354,6 @@ ruby_install() {
 		"$prefix"/bin/gem install --force --bindir "$prefix"/bin --version '< 2' bundler
 		;;
 	*)
-		"$prefix"/bin/gem update --system
 		"$prefix"/bin/gem install --force --bindir "$prefix"/bin bundler
 		;;
 	esac
@@ -367,7 +366,7 @@ ruby_gems_update() {
 
 	hey Updating RubyGems
 
-	gem update --system
+	gem update --system || cry "gem update exit code $? is suppressed"
 }
 
 ruby_purge() {

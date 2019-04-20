@@ -10,4 +10,4 @@ COPY . /app
 WORKDIR /app
 
 ENTRYPOINT ["/usr/bin/bats"]
-CMD ["tests"]
+CMD ["-t", "tests"]

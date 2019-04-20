@@ -4,19 +4,30 @@
 
 load test_helper
 
+setup() {
+	export -f inject_ruby_stubs uninject_ruby_stubs ensure_no_ruby
+	export -f bats_cry bats_die bats_see
+}
+
+teardown() {
+	uninject_ruby_stubs
+	unset -f inject_ruby_stubs uninject_ruby_stubs ensure_no_ruby
+	unset -f bats_cry bats_die bats_see
+}
+
 @test 'Initializing version by prefix table' {
 	run bash -s <<-'EOF'
-		. ./rubian
+		. ./rubian && inject_ruby_stubs
 
-		mkdir -p "$RUBIES/1.2.3"
+		mkdir -p "$RUBIES/2.1.0"
 		touch $_/.rubian
 
 		mkdir -p "$RUBIES"/4.5.6
 
-		initialize
+		load_installed 2>/dev/null
 
 		echo ${#installed_version_by_prefix[@]}
-		echo ${installed_version_by_prefix["$RUBIES/1.2.3"]}
+		echo ${installed_version_by_prefix["$RUBIES/2.1.0"]}
 
 		rm -rf -- "$RUBIES"
 	EOF
@@ -24,16 +35,16 @@ load test_helper
 	assert_success
 
 	[[ ${lines[0]} = '1'     ]]
-	[[ ${lines[1]} = '1.2.3' ]]
+	[[ ${lines[1]} = '2.1.0' ]]
 }
 
 @test 'Initializing version by prefix table in the lack of signature' {
 	run bash -s <<-'EOF'
-		. ./rubian
+		. ./rubian && inject_ruby_stubs
 
 		mkdir -p "$RUBIES/4.5.6"
 
-		initialize
+		load_installed 2>/dev/null
 
 		echo ${#installed_version_by_prefix[@]}
 
@@ -45,49 +56,16 @@ load test_helper
 	[[ ${lines[0]} = '0' ]]
 }
 
-@test 'Initializing suite  by version table' {
+@test 'Initializing string by version table' {
 	run bash -s <<-'EOF'
-		. ./rubian
+		. ./rubian && inject_ruby_stubs
 
-		declare -Ag stable=([version]=1.2.3)
+		load_available 2>/dev/null
 
-		initialize
-
-		echo ${available_suite_by_version[1.2.3]}
+		echo ${available_version_by_string[latest]}
 	EOF
 
 	assert_success
 
-	[[ ${lines[0]} = 'stable' ]]
-}
-
-@test 'Initializing suite by version wrappers' {
-	run bash -s <<-'EOF'
-		. ./rubian
-
-		declare -Ag stable=(
-			[version]=1.2.3
-			[major]=1.2
-			[sha256]=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-			[gem]=4.5.6
-			[bundler]=7.8.9
-		)
-
-		initialize
-
-		version_by_suite stable
-		major_by_suite stable
-		sha256_by_suite stable
-		gem_by_suite stable
-		bundler_by_suite stable
-
-	EOF
-
-	assert_success
-
-	[[ ${lines[0]} = '1.2.3' ]]
-	[[ ${lines[1]} = '1.2'   ]]
-	[[ ${lines[2]} = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' ]]
-	[[ ${lines[3]} = '4.5.6' ]]
-	[[ ${lines[4]} = '7.8.9' ]]
+	[[ ${lines[0]} = '2.6.3' ]]
 }

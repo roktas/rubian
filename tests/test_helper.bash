@@ -15,7 +15,7 @@ inject_ruby_stubs() {
 		eval -- "${stub}() { :; }"
 	done
 
-	ncat() {
+	webcat() {
 		cat ./tests/index.txt
 	}
 

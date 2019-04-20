@@ -69,58 +69,62 @@ declare -ag cleanup_files=()
 
 cry() { echo -e >&2 "$*"; }
 
-if [[ -n ${RUBIAN_NOCOLOR:-} ]]; then
-	hey() { cry "$*";              }
-	fin() { cry "$*"; exit 0;      }
-	die() { cry "$*"; exit 1;      }
-	bug() { cry "BUG: $*"; exit 1; }
-else
-	hey() { cry "\\e[1;38;5;87m----->\\e[0m $*";        }
-	fin() { cry "\\e[1;38;5;255m$*\\e[0m"; exit 0;      }
-	die() { cry "\\e[1;38;5;198m$*\\e[0m"; exit 1;      }
-	bug() { cry "BUG: \\e[1;38;5;207m$*\\e[0m"; exit 1; }
-fi
-
-fetch() {
-	local url=$1
-	local out=${2:-}
-
-	local -a exe
+initialize() {
+	if [[ -n ${RUBIAN_NOCOLOR:-} ]]; then
+		hey() { cry "$*";              }
+		fin() { cry "$*"; exit 0;      }
+		die() { cry "$*"; exit 1;      }
+		bug() { cry "BUG: $*"; exit 1; }
+	else
+		hey() { cry "\\e[1;38;5;87m----->\\e[0m $*";        }
+		fin() { cry "\\e[1;38;5;255m$*\\e[0m"; exit 0;      }
+		die() { cry "\\e[1;38;5;198m$*\\e[0m"; exit 1;      }
+		bug() { cry "BUG: \\e[1;38;5;207m$*\\e[0m"; exit 1; }
+	fi
 
 	if command -v curl >/dev/null; then
-		exe=(
-			curl
-		)
-		if [[ -n ${out:-} ]]; then
-			exe+=(-fL --retry 3 -o "$out" "$url")
-		else
-			exe+=(-fsSL --retry 3 "$url")
-		fi
-	elif command -v wget >/dev/null; then
-		local hsts_unfound_before=
-		[[ -f ~/.wget-hsts ]] || hsts_unfound_before=true
+		fetch() {
+			local url=$1
+			local out=$2
 
-		exe=(
-			wget
-		)
-		if [[ -n ${out:-} ]]; then
-			exe+=(--tries 3 "$url")
-		else
-			exe+=(--tries 3 -qO- "$url")
-		fi
+			curl -fL --retry 3 -o "$out" "$url"
+		}
+
+		webcat() {
+			local url=$1
+
+			curl -fsSL --retry 3 "$url"
+		}
+	elif command -v wget >/dev/null; then
+		fetch() {
+			local url=$1
+			local out=$2
+
+			local hsts_unfound_before=
+			[[ -f ~/.wget-hsts ]] || hsts_unfound_before=true
+
+			wget --tries 3 -O "$out" "$url"
+
+			if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
+				rm -f ~/.wget-hsts
+			fi
+		}
+
+		webcat() {
+			local url=$1
+
+			local hsts_unfound_before=
+			[[ -f ~/.wget-hsts ]] || hsts_unfound_before=true
+
+			wget --tries 3 -qO- "$url"
+
+			if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
+				rm -f ~/.wget-hsts
+			fi
+		}
 	else
 		die "Wget or Curl required"
 	fi
-
-	"${exe[@]}"
-
-	if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
-		rm -f ~/.wget-hsts
-	fi
-}
-
-ncat() {
-	fetch "$1"
 }
 
 is_inside_docker() {
@@ -135,7 +139,7 @@ load_available() {
 	hey Fetching available Ruby versions
 
 	local -a index=()
-	mapfile -t index < <(ncat "$UPSTREAM" | tac)
+	mapfile -t index < <(webcat "$UPSTREAM" | tac)
 
 	local -a schema
 	read -ra schema <<<"${index[-1]}"
@@ -860,5 +864,7 @@ main() {
 
 	"$func" "$@"
 }
+
+initialize
 
 [[ "${BASH_SOURCE[0]}" != "${0}" ]] || main "$@"

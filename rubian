@@ -83,20 +83,44 @@ fi
 
 fetch() {
 	local url=$1
-	local out=$2
+	local out=${2:-}
+
+	local -a exe
 
 	if command -v curl >/dev/null; then
-		curl -fL --retry 3 -o "$out" "$url"
+		exe=(
+			curl
+		)
+		if [[ -n ${out:-} ]]; then
+			exe+=(-fL --retry 3 -o "$out" "$url")
+		else
+			exe+=(-fsSL --retry 3 "$url")
+		fi
 	elif command -v wget >/dev/null; then
 		local hsts_unfound_before=
 		[[ -f ~/.wget-hsts ]] || hsts_unfound_before=true
-		wget --tries=3 -O "$out" "$url"
-		if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
-			rm -f ~/.wget-hsts
+
+		exe=(
+			wget
+		)
+		if [[ -n ${out:-} ]]; then
+			exe+=(--tries 3 "$url")
+		else
+			exe+=(--tries 3 -qO- "$url")
 		fi
 	else
 		die "Wget or Curl required"
 	fi
+
+	"${exe[@]}"
+
+	if [[ -f ~/.wget-hsts ]] && [[ -n $hsts_unfound_before ]]; then
+		rm -f ~/.wget-hsts
+	fi
+}
+
+ncat() {
+	fetch "$1"
 }
 
 is_inside_docker() {
@@ -111,7 +135,7 @@ load_available() {
 	hey Fetching available Ruby versions
 
 	local -a index=()
-	mapfile -t index < <(curl -fsSL "$UPSTREAM" | tac)
+	mapfile -t index < <(ncat "$UPSTREAM" | tac)
 
 	local -a schema
 	read -ra schema <<<"${index[-1]}"

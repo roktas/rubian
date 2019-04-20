@@ -15,7 +15,7 @@ inject_ruby_stubs() {
 		eval -- "${stub}() { :; }"
 	done
 
-	curl() {
+	ncat() {
 		cat ./tests/index.txt
 	}
 

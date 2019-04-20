@@ -19,7 +19,7 @@ Anti özellikler:
 
 - Rbenv veya RVM gibi ortam değişkenlerine bağlı olarak kullanıcı veya proje
   özelinde çalışmaz
-- Tüm Ruby sürümlerini desteklemez.  Sadece 2.1 ve üstü sürümleri destekler.
+- Tüm Ruby sürümlerini desteklemez.  Sadece 2.1.3 ve üstü sürümleri destekler.
 
 Kurulum
 -------

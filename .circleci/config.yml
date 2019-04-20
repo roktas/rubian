@@ -25,11 +25,11 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install and uninstall all suites
+          name: Install and uninstall sample versions
           command: |
             PATH=$PWD:$PATH
 
-            rubian install stable unstable legacy
+            rubian install latest 2.1
             for prefix in /opt/rubies/*; do
               "$prefix"/bin/ruby -v
             done

@@ -1,15 +1,14 @@
 rubian
 ======
 
-Rubian, Ruby ve Debian isimlerinden türetilmiş bir kısaltmadır. Debian ve türevi
-dağıtımlara desteklenen, sınırlı sayıdaki Ruby sürümümlerini kurmak, versiyonlar
-arasındaki geçişi yönetmek ve güncellemeleri almak için geliştirilmiştir.
+Debian ve türevi dağıtımlarda farklı Ruby sürümleri kurmak ve bu sürümler
+arasında geçiş yapmak için kullanılan bir araç.
 
-Mevcut sürümdeki özellikler:
+Özellikler:
 
 - Sadece Debian ve türevi dağıtımları destekler
 - Sistem geneli çalışır
-- Sadece MRI (the gold standard) için kullanılabilir
+- Sadece MRI için kullanılabilir
 - [`jemalloc`](http://jemalloc.net) destekler
 - İlave bağımlılığı yoktur
 - Artık bırakmadan kaldırılabilir
@@ -120,8 +119,15 @@ Sistem geneli Ruby linklerinde yaşanabilecek bozulmaları düzeltmek için:
 rubian relink
 ```
 
-License
--------
+Sıkça sorulabilecekler
+----------------------
+
+- Rubian adı nereden geliyor?
+
+  Ruby :heart: Debian → Rubian
+
+Lisans
+------
 
 Rubian Copyright (C) 2019 [Alaturka Authors](https://github.com/alaturka).
 

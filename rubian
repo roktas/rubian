@@ -774,7 +774,7 @@ ensure_arguments_really_available() {
 	local arg
 	for arg; do
 		local version=${available_version_by_string[$arg]:-}
-		[[ -n ${version:-} ]] || die "Unsupported version: $version"
+		[[ -n ${version:-} ]] || die "Unsupported version: $arg"
 
 		[[ -z ${seen[$version]:-} ]] || continue
 

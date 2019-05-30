@@ -1,8 +1,8 @@
 rubian
 ======
 
-Debian ve türevi dağıtımlarda farklı Ruby sürümleri kurmak ve bu sürümler
-arasında geçiş yapmak için kullanılan bir araç.
+Debian ve türevi dağıtımlarda farklı Ruby sürümleri kurmak ve bu sürümler arasında geçiş yapmak için kullanılan bir
+araç.
 
 Özellikler:
 
@@ -16,15 +16,13 @@ arasında geçiş yapmak için kullanılan bir araç.
 
 Anti özellikler:
 
-- Rbenv veya RVM gibi ortam değişkenlerine bağlı olarak kullanıcı veya proje
-  özelinde çalışmaz
+- Rbenv veya RVM gibi ortam değişkenlerine bağlı olarak kullanıcı veya proje özelinde çalışmaz.
 - Tüm Ruby sürümlerini desteklemez.  Sadece 2.1.3 ve üstü sürümleri destekler.
 
 Kurulum
 -------
 
-Kurulum için gerekli olan paketlere sahip olduğunuza emin olun. Ruby için gerekli
-paketler bu adımda kurulmaz.
+Kurulum için gerekli olan paketlere sahip olduğunuza emin olun. Ruby için gerekli paketler bu adımda kurulmaz.
 
 - `curl`
 
@@ -33,8 +31,8 @@ curl -fsSL https://raw.githubusercontent.com/omu/rubian/master/rubian >/usr/loca
 chmod +x /usr/local/bin/rubian
 ```
 
-Eğer [`scripts`](https://github.com/omu/debian/blob/master/bin/scripts)
-yardımcısına sahipseniz aşağıdaki komutu kullanın.
+Eğer [`scripts`](https://github.com/omu/debian/blob/master/bin/scripts) yardımcısına sahipseniz aşağıdaki komutu
+kullanın.
 
 ```sh
 scripts _/rubian

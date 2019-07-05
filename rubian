@@ -54,9 +54,6 @@ declare -ag ruby_slave_programs=(bundler bundle gem rake ri erb irb rdoc)
 # Description and synopsis for command help
 declare -Ag help_description help_synopsis
 
-# Program configuration keyed by options
-declare -Ag program_configuration=()
-
 # Sanitized arguments vector for the command
 declare -ag program_arguments=()
 

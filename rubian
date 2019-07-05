@@ -309,6 +309,30 @@ ruby_build() {
 	make -j "$(nproc)"
 }
 
+ruby_wrapper() {
+	local version=$1
+
+	hey Setting up wrapper "$version"
+
+	local prefix
+	prefix=$(installation_prefix "$version")
+
+	local wrapper=$prefix/bin/ruby
+	local real=$wrapper.real
+
+	[[ -x $wrapper ]] || bug "No binary found to wrap: $wrapper"
+
+	mv -f "$wrapper" "$real"
+	cat >"$wrapper" <<-EOF
+		#!/bin/sh
+		if [ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && [ -z "$LD_PRELOAD" ]; then
+			export LD_PRELOAD="$RUBY_LD_PRELOAD"
+		fi
+		exec "$real" "$@"
+	EOF
+	chmod +x "$wrapper"
+}
+
 ruby_install() {
 	local version=$1
 
@@ -393,6 +417,7 @@ ruby_all() {
 	ruby_build "$version" || die "E: Building Ruby '$version' failed."
 
 	if ruby_install "$version"; then
+		ruby_wrapper "$version"
 		ruby_register "$version"
 	else
 		ruby_purge "$version"

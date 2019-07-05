@@ -322,15 +322,14 @@ ruby_wrapper() {
 
 	[[ -x $wrapper ]] || bug "No binary found to wrap: $wrapper"
 
-	mv -f "$wrapper" "$real"
-	cat >"$wrapper" <<-EOF
-		#!/bin/sh
-		if [ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && [ -z "$LD_PRELOAD" ]; then
-			export LD_PRELOAD="$RUBY_LD_PRELOAD"
-		fi
-		exec "$real" "$@"
-	EOF
-	chmod +x "$wrapper"
+	mv -f "$wrapper" "$real"; {
+		cat <<-'EOF'
+			#!/bin/sh
+
+			[ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && [ -z "$LD_PRELOAD" ] && export LD_PRELOAD="$RUBY_LD_PRELOAD"
+		EOF
+		printf 'exec "%s" "%s"\n' "$real" '$@'
+	} >"$wrapper" && chmod +x "$wrapper"
 }
 
 ruby_install() {

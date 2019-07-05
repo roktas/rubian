@@ -323,8 +323,8 @@ ruby_wrapper() {
 		cat <<-'EOF'
 			#!/bin/sh
 
-			[ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && [ -z "$LD_PRELOAD" ] && export LD_PRELOAD="$RUBY_LD_PRELOAD"
-			[ -n "$RUBY_MALLOC_ARENA_MAX" ] && [ -z "$MALLOC_ARENA_MAX" ] && export MALLOC_ARENA_MAX="$RUBY_MALLOC_ARENA_MAX"
+			[ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && export LD_PRELOAD="$RUBY_LD_PRELOAD"
+			[ -n "$RUBY_MALLOC_ARENA_MAX" ] && export MALLOC_ARENA_MAX="$RUBY_MALLOC_ARENA_MAX"
 		EOF
 		printf 'exec "%s" "%s"\n' "$real" '$@'
 	} >"$wrapper" && chmod +x "$wrapper"

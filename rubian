@@ -54,9 +54,6 @@ declare -ag ruby_slave_programs=(bundler bundle gem rake ri erb irb rdoc)
 # Description and synopsis for command help
 declare -Ag help_description help_synopsis
 
-# Program configuration keyed by options
-declare -Ag program_configuration=()
-
 # Sanitized arguments vector for the command
 declare -ag program_arguments=()
 
@@ -237,19 +234,6 @@ ruby_fetch() {
 	rm -f ruby.tar.xz
 }
 
-find_suitable_jemalloc() {
-	local libjemalloc
-
-	for libjemalloc in libjemalloc2 libjemalloc1; do
-		if apt-get install -s "$libjemalloc" &>/dev/null; then
-			echo "$libjemalloc"
-			return 0
-		fi
-	done
-
-	return 1
-}
-
 ruby_depends() {
 	local version=$1
 
@@ -280,14 +264,6 @@ ruby_depends() {
 	esac
 
 	local -a runtime_packages+=()
-
-	if [[ -z ${program_configuration[without_jemalloc]:-} ]]; then
-		local libjemalloc
-		if libjemalloc=$(find_suitable_jemalloc) && [[ -n ${libjemalloc:-} ]]; then
-			runtime_packages+=("$libjemalloc")
-			development_packages+=(libjemalloc-dev)
-		fi
-	fi
 
 	local package
 
@@ -323,15 +299,35 @@ ruby_build() {
 		"$prefix"
 	)
 
-	if [[ -z ${program_configuration[without_jemalloc]:-} ]]; then
-		ruby_configure_arguments+=('--with-jemalloc')
-	fi
-
 	! is_inside_docker || CFLAGS='-DENABLE_PATH_CHECK=0'
 
 	./configure CFLAGS="${CFLAGS:-}" "${ruby_configure_arguments[@]}"
 
 	make -j "$(nproc)"
+}
+
+ruby_wrapper() {
+	local version=$1
+
+	hey Setting up wrapper "$version"
+
+	local prefix
+	prefix=$(installation_prefix "$version")
+
+	local wrapper=$prefix/bin/ruby
+	local real=$wrapper.real
+
+	[[ -x $wrapper ]] || bug "No binary found to wrap: $wrapper"
+
+	mv -f "$wrapper" "$real"; {
+		cat <<-'EOF'
+			#!/bin/sh
+
+			[ -n "$RUBY_LD_PRELOAD" ] && [ -f "$RUBY_LD_PRELOAD" ] && [ -z "$LD_PRELOAD" ] && export LD_PRELOAD="$RUBY_LD_PRELOAD"
+			[ -n "$RUBY_MALLOC_ARENA_MAX" ] && [ -z "$MALLOC_ARENA_MAX" ] && export MALLOC_ARENA_MAX="$RUBY_MALLOC_ARENA_MAX"
+		EOF
+		printf 'exec "%s" "%s"\n' "$real" '$@'
+	} >"$wrapper" && chmod +x "$wrapper"
 }
 
 ruby_install() {
@@ -418,6 +414,7 @@ ruby_all() {
 	ruby_build "$version" || die "E: Building Ruby '$version' failed."
 
 	if ruby_install "$version"; then
+		ruby_wrapper "$version"
 		ruby_register "$version"
 	else
 		ruby_purge "$version"

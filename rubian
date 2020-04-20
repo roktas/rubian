@@ -862,6 +862,8 @@ dispatch() {
 main() {
 	local func
 
+	initialize
+
 	if [[ $# -ne 0  ]]; then
 		local arg
 		while [[ $# -gt 0 ]]; do
@@ -882,6 +884,4 @@ main() {
 	"$func" "$@"
 }
 
-initialize
-
-[[ "${BASH_SOURCE[0]:-}" != "${0}" ]] || main "$@"
+main "$@"

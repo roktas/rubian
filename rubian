@@ -485,8 +485,8 @@ priority() {
 	local lowest_priority_prefix=${3:-}
 
 	case $prefix in
-	$highest_priority_prefix) echo 30 ;;
-	$lowest_priority_prefix)  echo 10 ;;
+	"$highest_priority_prefix") echo 30 ;;
+	"$lowest_priority_prefix")  echo 10 ;;
 	*)                        echo 20 ;;
 	esac
 }

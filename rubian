@@ -163,8 +163,8 @@ load_available() {
 		# format which will be an other limiting factor.  For example
 		# only >= 2.1.3 versions support tar.xz.
 
-		[[ $version =~ ^(2[.][^0][0-9]*|[3-9])[.] ]] || continue # support > 2.1 versions
-		[[ ${info[url]:-} =~ [.]${PACKAGE}$       ]] || continue # select suitable package format
+		[[ $version =~ ^([2-9][.][^0][0-9]*|[3-9])[.] ]] || continue # support > 2.1 versions
+		[[ ${info[url]:-} =~ [.]${PACKAGE}$       ]]     || continue # select suitable package format
 
 		available_version_by_string[$version]=$version
 		[[ -n ${available_version_by_string[latest]:-} ]] || available_version_by_string[latest]=$version

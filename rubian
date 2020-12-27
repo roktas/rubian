@@ -17,7 +17,7 @@ readonly SHIBBOLETH=.rubian
 # Root directory for all Ruby installations
 readonly RUBIES=${RUBIES:-/opt/rubies}
 
-readonly UPSTREAM=https://cache.ruby-lang.org/pub/ruby/index.txt
+readonly UPSTREAM=https://raw.githubusercontent.com/omu/rubian/master/index.txt
 
 readonly PACKAGE='tar.xz'
 
